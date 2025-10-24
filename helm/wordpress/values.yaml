@@ -2,15 +2,15 @@ replicaCount: 2
 
 image:
   mysql:
-    repository: mysql-custom
+    repository: charanbhatia/mysql-custom
     tag: latest
     pullPolicy: IfNotPresent
   wordpress:
-    repository: wordpress-custom
+    repository: charanbhatia/wordpress-custom
     tag: latest
     pullPolicy: IfNotPresent
   nginx:
-    repository: nginx-openresty
+    repository: charanbhatia/nginx-openresty
     tag: latest
     pullPolicy: IfNotPresent
 

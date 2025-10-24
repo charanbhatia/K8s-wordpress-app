@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: default
+data:
+  wordpress-dashboard.json: |
+{{ .Files.Get "dashboards/wordpress-dashboard.json" | indent 4 }}

@@ -1,0 +1,80 @@
+replicaCount: 2
+
+image:
+  mysql:
+    repository: mysql-custom
+    tag: latest
+    pullPolicy: IfNotPresent
+  wordpress:
+    repository: wordpress-custom
+    tag: latest
+    pullPolicy: IfNotPresent
+  nginx:
+    repository: nginx-openresty
+    tag: latest
+    pullPolicy: IfNotPresent
+
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 80
+
+mysql:
+  rootPassword: rootpass
+  database: wordpress
+  user: wpuser
+  password: wppass
+  port: 3306
+
+wordpress:
+  dbHost: mysql
+  dbName: wordpress
+  dbUser: wpuser
+  dbPassword: wppass
+
+persistence:
+  mysql:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteMany
+    size: 10Gi
+  wordpress:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteMany
+    size: 10Gi
+
+resources:
+  mysql:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  wordpress:
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+    limits:
+      memory: "512Mi"
+      cpu: "400m"
+  nginx:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

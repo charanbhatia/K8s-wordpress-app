@@ -1,0 +1,38 @@
+{{- if .Values.persistence.wordpress.enabled }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "wordpress.fullname" . }}-wordpress-pv
+  labels:
+    {{- include "wordpress.labels" . | nindent 4 }}
+    component: wordpress
+spec:
+  capacity:
+    storage: {{ .Values.persistence.wordpress.size }}
+  accessModes:
+    - {{ .Values.persistence.wordpress.accessMode }}
+  persistentVolumeReclaimPolicy: Retain
+  {{- if .Values.persistence.wordpress.storageClass }}
+  storageClassName: {{ .Values.persistence.wordpress.storageClass }}
+  {{- end }}
+  hostPath:
+    path: /data/wordpress
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "wordpress.fullname" . }}-wordpress-pvc
+  labels:
+    {{- include "wordpress.labels" . | nindent 4 }}
+    component: wordpress
+spec:
+  accessModes:
+    - {{ .Values.persistence.wordpress.accessMode }}
+  {{- if .Values.persistence.wordpress.storageClass }}
+  storageClassName: {{ .Values.persistence.wordpress.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.wordpress.size }}
+{{- end }}

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wordpress.fullname" . }}-wordpress
+  labels:
+    {{- include "wordpress.labels" . | nindent 4 }}
+    component: wordpress
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9000
+    targetPort: fastcgi
+    protocol: TCP
+    name: fastcgi
+  selector:
+    {{- include "wordpress.selectorLabels" . | nindent 4 }}
+    component: wordpress

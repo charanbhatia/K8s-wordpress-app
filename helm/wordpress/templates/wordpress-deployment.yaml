@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wordpress.fullname" . }}-wordpress
+  labels:
+    {{- include "wordpress.labels" . | nindent 4 }}
+    component: wordpress
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "wordpress.selectorLabels" . | nindent 6 }}
+      component: wordpress
+  template:
+    metadata:
+      labels:
+        {{- include "wordpress.selectorLabels" . | nindent 8 }}
+        component: wordpress
+    spec:
+      containers:
+      - name: wordpress
+        image: "{{ .Values.image.wordpress.repository }}:{{ .Values.image.wordpress.tag }}"
+        imagePullPolicy: {{ .Values.image.wordpress.pullPolicy }}
+        ports:
+        - containerPort: 9000
+          name: fastcgi
+        env:
+        - name: WORDPRESS_DB_HOST
+          value: {{ include "wordpress.fullname" . }}-mysql:{{ .Values.mysql.port }}
+        - name: WORDPRESS_DB_NAME
+          value: {{ .Values.wordpress.dbName }}
+        - name: WORDPRESS_DB_USER
+          value: {{ .Values.wordpress.dbUser }}
+        - name: WORDPRESS_DB_PASSWORD
+          value: {{ .Values.wordpress.dbPassword }}
+        volumeMounts:
+        - name: wordpress-data
+          mountPath: /var/www/html
+        resources:
+          {{- toYaml .Values.resources.wordpress | nindent 10 }}
+        livenessProbe:
+          tcpSocket:
+            port: 9000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 9000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: wordpress-data
+        {{- if .Values.persistence.wordpress.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ include "wordpress.fullname" . }}-wordpress-pvc
+        {{- else }}
+        emptyDir: {}
+        {{- end }}

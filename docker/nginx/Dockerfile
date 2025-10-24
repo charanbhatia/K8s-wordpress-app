@@ -24,6 +24,7 @@ RUN wget https://openresty.org/download/openresty-${OPENRESTY_VERSION}.tar.gz \
         --without-http_redis2_module \
         --with-http_iconv_module \
         --with-http_postgres_module \
+        --with-http_stub_status_module \
         -j8 \
     && make -j8 \
     && make install \

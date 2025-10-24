@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress-nginx
+  namespace: wordpress
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: wordpress
+      component: nginx
+  template:
+    metadata:
+      labels:
+        app: wordpress
+        component: nginx
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "80"
+        prometheus.io/path: "/nginx_status"
+    spec:
+      containers:
+      - name: nginx
+        image: charanbhatia/nginx-openresty@sha256:526ed798c67a992d9c40f21b8f1ed301471e53e8d050941ce2b880e95b9e6701
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          name: http
+        volumeMounts:
+        - name: wordpress-data
+          mountPath: /var/www/html
+          readOnly: true
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: wordpress-data
+        persistentVolumeClaim:
+          claimName: wordpress-wordpress-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress-nginx
+  namespace: wordpress
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app: wordpress
+    component: nginx

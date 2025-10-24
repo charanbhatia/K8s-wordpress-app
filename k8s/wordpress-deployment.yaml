@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress-wordpress
+  namespace: wordpress
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: wordpress
+      component: wordpress
+  template:
+    metadata:
+      labels:
+        app: wordpress
+        component: wordpress
+    spec:
+      initContainers:
+      - name: copy-wordpress
+        image: charanbhatia/wordpress-custom:latest
+        command: 
+        - sh
+        - -c
+        - |
+          if [ ! -f /data/wp-config.php ]; then
+            echo "Copying WordPress files to persistent volume..."
+            cp -rp /var/www/html/* /data/
+            echo "Copy complete"
+          else
+            echo "WordPress files already exist in persistent volume"
+          fi
+        volumeMounts:
+        - name: wordpress-data
+          mountPath: /data
+      containers:
+      - name: wordpress
+        image: charanbhatia/wordpress-custom:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9000
+          name: fastcgi
+        env:
+        - name: WORDPRESS_DB_HOST
+          value: wordpress-mysql:3306
+        - name: WORDPRESS_DB_NAME
+          value: wordpress
+        - name: WORDPRESS_DB_USER
+          value: wpuser
+        - name: WORDPRESS_DB_PASSWORD
+          value: wppass
+        volumeMounts:
+        - name: wordpress-data
+          mountPath: /var/www/html
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "400m"
+        livenessProbe:
+          tcpSocket:
+            port: 9000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 9000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: wordpress-data
+        persistentVolumeClaim:
+          claimName: wordpress-wordpress-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress-wordpress
+  namespace: wordpress
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9000
+    targetPort: fastcgi
+    protocol: TCP
+    name: fastcgi
+  selector:
+    app: wordpress
+    component: wordpress

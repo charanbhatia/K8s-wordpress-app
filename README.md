@@ -234,6 +234,14 @@ Configured to scrape:
 - **Mount**: /var/lib/mysql
 - **Access**: ReadWriteOnce
 
+> **Note**: The PDF requirements specify ReadWriteMany for deployment scaling. However, Docker Desktop Kubernetes doesn't support ReadWriteMany with hostPath volumes. For production deployments on cloud providers (AWS, GCP, Azure), use:
+> - AWS EFS (elastic file system)
+> - GCP Filestore
+> - Azure Files
+> - NFS-based storage solutions
+> 
+> To enable ReadWriteMany, update the PVC `accessModes` from `ReadWriteOnce` to `ReadWriteMany` and use an appropriate StorageClass.
+
 ### WordPress Files
 
 - **PVC**: wordpress-wordpress-pvc

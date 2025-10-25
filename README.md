@@ -1,378 +1,347 @@
 # Production-Grade WordPress on Kubernetes
 
-Complete production-ready WordPress deployment on Kubernetes with Nginx (OpenResty + Lua), MySQL, and comprehensive monitoring using Prometheus/Grafana.
+Complete production-ready WordPress deployment on Kubernetes with Nginx (OpenResty + Lua), MySQL 8.0, and comprehensive monitoring using Prometheus/Grafana.
 
 ## Architecture
 
 ```
-┌─────────────┐
-│  LoadBalancer│
-└──────┬──────┘
-       │
-┌──────▼──────────┐
-│  Nginx (OpenResty)│ (Port 80)
-│  with Lua       │
-└──────┬──────────┘
-       │
-┌──────▼──────────┐
-│  WordPress      │ (Port 9000)
-│  PHP-FPM        │
-└──────┬──────────┘
-       │
-┌──────▼──────────┐
-│  MySQL          │ (Port 3306)
-└─────────────────┘
+┌─────────────────┐
+│  LoadBalancer   │
+└────────┬────────┘
+         │
+┌────────▼──────────┐
+│ Nginx (OpenResty) │ (2 replicas)
+│   with Lua        │ Port 80
+└────────┬──────────┘
+         │
+┌────────▼──────────┐
+│   WordPress       │ (2 replicas)
+│   PHP 8.1-FPM     │ Port 9000
+└────────┬──────────┘
+         │
+┌────────▼──────────┐
+│   MySQL 8.0       │ (1 replica)
+│                   │ Port 3306
+└───────────────────┘
+
+Monitoring:
+┌─────────────┐    ┌──────────┐
+│ Prometheus  │───▶│ Grafana  │
+└─────────────┘    └──────────┘
 ```
+
+## Features
+
+- ✅ Production-grade WordPress with PHP 8.1-FPM
+- ✅ MySQL 8.0 with optimized InnoDB configuration
+- ✅ Nginx with OpenResty (Lua scripting support)
+- ✅ Persistent storage for database and WordPress files
+- ✅ Horizontal scaling for WordPress and Nginx
+- ✅ Prometheus metrics collection
+- ✅ Grafana dashboards for monitoring
+- ✅ Health check endpoints
+- ✅ Resource limits and requests
 
 ## Prerequisites
 
 - Kubernetes cluster (v1.24+)
 - kubectl configured
-- Helm 3.x installed
-- Docker for building images
+- Docker (for building custom images)
 - 20GB+ available storage
 
 ## Quick Start
 
-### 1. Build Docker Images
+### 1. Deploy WordPress Application
 
 ```bash
-cd docker/mysql
-docker build -t mysql-custom:latest .
+# Create WordPress namespace
+kubectl create namespace wordpress
 
-cd ../wordpress
-docker build -t wordpress-custom:latest .
+# Deploy storage
+kubectl apply -f k8s/mysql-pvc.yaml
+kubectl apply -f k8s/wordpress-pvc.yaml
 
-cd ../nginx
-docker build -t nginx-openresty:latest .
+# Deploy MySQL
+kubectl apply -f k8s/mysql-deployment.yaml
+
+# Deploy WordPress
+kubectl apply -f k8s/wordpress-deployment.yaml
+
+# Deploy Nginx
+kubectl apply -f k8s/nginx-deployment.yaml
+
+# Verify deployment
+kubectl get pods -n wordpress
 ```
 
-### 2. Deploy WordPress Application
+Expected output:
+```
+NAME                                   READY   STATUS    RESTARTS   AGE
+wordpress-mysql-xxxxxxxxx-xxxxx        1/1     Running   0          2m
+wordpress-nginx-xxxxxxxxx-xxxxx        1/1     Running   0          1m
+wordpress-nginx-xxxxxxxxx-xxxxx        1/1     Running   0          1m
+wordpress-wordpress-xxxxxxxxx-xxxxx    1/1     Running   0          1m
+wordpress-wordpress-xxxxxxxxx-xxxxx    1/1     Running   0          1m
+```
+
+### 2. Deploy Monitoring Stack
 
 ```bash
-cd helm/wordpress
-helm install my-release .
+# Deploy Prometheus and Grafana
+kubectl apply -f k8s/monitoring/namespace.yaml
+kubectl apply -f k8s/monitoring/prometheus-rbac.yaml
+kubectl apply -f k8s/monitoring/prometheus-config.yaml
+kubectl apply -f k8s/monitoring/prometheus-deployment.yaml
+kubectl apply -f k8s/monitoring/grafana-config.yaml
+kubectl apply -f k8s/monitoring/grafana-deployment.yaml
+
+# Verify monitoring pods
+kubectl get pods -n monitoring
 ```
 
-### 3. Deploy Monitoring Stack
-
-```bash
-cd ../monitoring
-helm dependency update
-helm install monitoring .
-```
-
-### 4. Access Services
-
-```bash
-kubectl get services
-```
-
-Access WordPress: `http://<nginx-service-external-ip>`
-Access Grafana: `http://<grafana-service-external-ip>`
-
-## Detailed Deployment
-
-### Step 1: Prepare Docker Images
-
-Build all three custom Docker images:
-
-**MySQL:**
-```bash
-cd docker/mysql
-docker build -t mysql-custom:latest .
-docker tag mysql-custom:latest <your-registry>/mysql-custom:latest
-docker push <your-registry>/mysql-custom:latest
-```
+### 3. Access Applications
 
 **WordPress:**
 ```bash
-cd docker/wordpress
-docker build -t wordpress-custom:latest .
-docker tag wordpress-custom:latest <your-registry>/wordpress-custom:latest
-docker push <your-registry>/wordpress-custom:latest
+kubectl port-forward -n wordpress svc/wordpress-nginx 8080:80
 ```
+Open http://localhost:8080 in your browser
 
-**Nginx with OpenResty:**
+**Grafana Dashboard:**
 ```bash
-cd docker/nginx
-docker build -t nginx-openresty:latest .
-docker tag nginx-openresty:latest <your-registry>/nginx-openresty:latest
-docker push <your-registry>/nginx-openresty:latest
+kubectl port-forward -n monitoring svc/grafana 3000:3000
 ```
+Open http://localhost:3000 (Login: admin / admin123)
 
-### Step 2: Configure Values
-
-Edit `helm/wordpress/values.yaml`:
-
-```yaml
-image:
-  mysql:
-    repository: <your-registry>/mysql-custom
-    tag: latest
-  wordpress:
-    repository: <your-registry>/wordpress-custom
-    tag: latest
-  nginx:
-    repository: <your-registry>/nginx-openresty
-    tag: latest
-
-mysql:
-  rootPassword: <secure-password>
-  password: <secure-password>
-
-persistence:
-  mysql:
-    size: 20Gi
-  wordpress:
-    size: 20Gi
+**Prometheus:**
+```bash
+kubectl port-forward -n monitoring svc/prometheus 9090:9090
 ```
+Open http://localhost:9090
 
-### Step 3: Deploy WordPress
+## Docker Images
+
+All images are available on Docker Hub:
+- `charanbhatia/mysql-custom:latest` - MySQL 8.0 with production config
+- `charanbhatia/wordpress-custom:latest` - WordPress with PHP 8.1-FPM
+- `charanbhatia/nginx-openresty:latest` - Nginx with OpenResty and Lua
+
+### Build Custom Images (Optional)
 
 ```bash
-cd helm/wordpress
-helm install my-release . --namespace default
+# MySQL
+docker build -t charanbhatia/mysql-custom:latest -f docker/mysql/Dockerfile docker/mysql
+docker push charanbhatia/mysql-custom:latest
+
+# WordPress
+docker build -t charanbhatia/wordpress-custom:latest -f docker/wordpress/Dockerfile docker/wordpress
+docker push charanbhatia/wordpress-custom:latest
+
+# Nginx with OpenResty
+docker build -t charanbhatia/nginx-openresty:latest -f docker/nginx/Dockerfile docker/nginx
+docker push charanbhatia/nginx-openresty:latest
 ```
-
-Verify deployment:
-```bash
-kubectl get pods
-kubectl get pvc
-kubectl get services
-```
-
-### Step 4: Deploy Monitoring
-
-```bash
-cd helm/monitoring
-helm dependency update
-helm install monitoring . --namespace default
-```
-
-Wait for pods to be ready:
-```bash
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=prometheus --timeout=300s
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana --timeout=300s
-```
-
-### Step 5: Access Grafana
-
-Get Grafana service:
-```bash
-kubectl get service monitoring-grafana
-```
-
-Default credentials:
-- Username: `admin`
-- Password: `admin`
 
 ## Configuration
 
-### WordPress Configuration
+### WordPress Environment Variables
 
-Environment variables can be set in `values.yaml`:
-
+Configured in `k8s/wordpress-deployment.yaml`:
 ```yaml
-wordpress:
-  dbHost: mysql
-  dbName: wordpress
-  dbUser: wpuser
-  dbPassword: wppass
+env:
+  - name: WORDPRESS_DB_HOST
+    value: wordpress-mysql:3306
+  - name: WORDPRESS_DB_NAME
+    value: wordpress
+  - name: WORDPRESS_DB_USER
+    value: wpuser
+  - name: WORDPRESS_DB_PASSWORD
+    value: wppass
 ```
-
-### Nginx Configuration
-
-Nginx is configured with:
-- Lua scripting support
-- FastCGI proxy to WordPress
-- Access and error logging
-- Health check endpoint: `/health`
-- Status endpoint: `/nginx_status`
 
 ### MySQL Configuration
 
-Custom MySQL configuration in `docker/mysql/custom.cnf`:
-- InnoDB optimization
-- Connection pooling
-- Slow query logging
+Custom configuration in `docker/mysql/custom.cnf`:
+- Max connections: 200
+- InnoDB buffer pool: 256MB
+- InnoDB log file size: 64MB
+- Character set: utf8mb4
+- Optimized for WordPress workloads
 
-### Scaling
+### Nginx Configuration
 
-Scale WordPress and Nginx horizontally:
+Features:
+- OpenResty with Lua scripting
+- FastCGI proxy to WordPress PHP-FPM
+- Custom logging format for metrics
+- Health endpoint: `/health`
+- Static asset caching
+- Prometheus annotations for scraping
 
+## Scaling
+
+### Horizontal Scaling
+
+Scale WordPress application:
 ```bash
-kubectl scale deployment my-release-wordpress-wordpress --replicas=5
-kubectl scale deployment my-release-wordpress-nginx --replicas=5
+kubectl scale deployment wordpress-wordpress -n wordpress --replicas=5
 ```
 
-Or enable autoscaling in `values.yaml`:
-
-```yaml
-autoscaling:
-  enabled: true
-  minReplicas: 2
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 80
+Scale Nginx:
+```bash
+kubectl scale deployment wordpress-nginx -n wordpress --replicas=5
 ```
+
+### Resource Configuration
+
+Current resource limits per pod:
+- **MySQL**: 512Mi-1Gi memory, 250m-500m CPU
+- **WordPress**: 256Mi-512Mi memory, 200m-400m CPU
+- **Nginx**: 128Mi-256Mi memory, 100m-200m CPU
 
 ## Monitoring
 
 ### Metrics Collected
 
-- **Pod CPU utilization**: Per-container CPU usage
-- **Pod memory utilization**: Per-container memory usage
-- **Nginx total requests**: HTTP request count
-- **Nginx 5xx errors**: Server error count
-- **Request latency**: Response time percentiles
-- **MySQL connections**: Active database connections
-- **MySQL queries**: Query execution metrics
-
-See [METRICS.md](METRICS.md) for complete metrics documentation.
+- **Pod CPU/Memory**: Container resource usage
+- **Nginx Requests**: Total HTTP requests
+- **Nginx Errors**: 5xx error count
+- **Request Latency**: Response time metrics
+- **MySQL Connections**: Database connections
+- **Pod Status**: Health and availability
 
 ### Grafana Dashboards
 
-Pre-configured dashboards include:
-- WordPress Overview
-- Nginx Performance
-- MySQL Performance
-- Kubernetes Cluster Metrics
+Pre-configured dashboard includes:
+1. Request Rate (per instance)
+2. 5xx Error Rate
+3. CPU Usage (per pod)
+4. Memory Usage (per pod)
 
-### Alerts
+### Prometheus Targets
 
-Configured alerts:
-- High CPU usage (>80% for 5min)
-- High memory usage (>80% for 5min)
-- High 5xx error rate (>5% for 2min)
-- Pod down (>1min)
-- High request latency (p95 >1s for 5min)
+Configured to scrape:
+- Kubernetes pods with Prometheus annotations
+- WordPress Nginx pods
+- Prometheus self-monitoring
 
-## Testing
+## Persistence
 
-### Test WordPress Installation
+### MySQL Data
+
+- **PVC**: wordpress-mysql-pvc
+- **Size**: 10Gi
+- **Mount**: /var/lib/mysql
+- **Access**: ReadWriteOnce
+
+### WordPress Files
+
+- **PVC**: wordpress-wordpress-pvc
+- **Size**: 10Gi
+- **Mount**: /var/www/html
+- **Access**: ReadWriteOnce
+- **Init Container**: Copies WordPress files on first boot
+
+## Troubleshooting
+
+### Check Pod Status
 
 ```bash
-WORDPRESS_IP=$(kubectl get service my-release-wordpress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-curl http://$WORDPRESS_IP
+kubectl get pods -n wordpress
+kubectl describe pod <pod-name> -n wordpress
+kubectl logs <pod-name> -n wordpress
 ```
 
-### Test Health Endpoints
+### Check Services
 
 ```bash
-curl http://$WORDPRESS_IP/health
-curl http://$WORDPRESS_IP/nginx_status
+kubectl get svc -n wordpress
+kubectl get svc -n monitoring
 ```
 
-### Load Testing
+### Test Database Connection
 
 ```bash
-kubectl run -it --rm load-test --image=busybox --restart=Never -- sh -c "while true; do wget -q -O- http://my-release-wordpress-nginx; done"
+kubectl exec -it <mysql-pod> -n wordpress -- mysql -u wpuser -pwppass wordpress -e "SHOW TABLES;"
+```
+
+### Verify WordPress Files
+
+```bash
+kubectl exec -it <wordpress-pod> -n wordpress -- ls -la /var/www/html
+```
+
+### Check Nginx Configuration
+
+```bash
+kubectl exec -it <nginx-pod> -n wordpress -- nginx -t
 ```
 
 ### View Logs
 
 ```bash
-kubectl logs -l component=nginx -f
-kubectl logs -l component=wordpress -f
-kubectl logs -l component=mysql -f
-```
+# All WordPress pods
+kubectl logs -l app=wordpress -n wordpress --all-containers=true
 
-## Troubleshooting
-
-### Pods Not Starting
-
-```bash
-kubectl describe pod <pod-name>
-kubectl logs <pod-name>
-```
-
-### PVC Issues
-
-```bash
-kubectl get pvc
-kubectl describe pvc <pvc-name>
-```
-
-### Database Connection Issues
-
-```bash
-kubectl exec -it <wordpress-pod> -- env | grep DB
-kubectl exec -it <mysql-pod> -- mysql -u root -p
-```
-
-### Nginx Configuration
-
-```bash
-kubectl exec -it <nginx-pod> -- nginx -t
-kubectl exec -it <nginx-pod> -- cat /opt/openresty/nginx/conf/nginx.conf
+# Specific component
+kubectl logs -l component=nginx -n wordpress -f
+kubectl logs -l component=wordpress -n wordpress -f
+kubectl logs -l component=mysql -n wordpress -f
 ```
 
 ## Cleanup
 
-### Delete WordPress Release
+### Delete WordPress
 
 ```bash
-helm delete my-release
+kubectl delete namespace wordpress
 ```
 
-### Delete Monitoring Stack
+### Delete Monitoring
 
 ```bash
-helm delete monitoring
+kubectl delete namespace monitoring
 ```
 
-### Delete PVCs
+### Delete Persistent Volumes
 
 ```bash
-kubectl delete pvc --all
-```
-
-### Delete PVs
-
-```bash
-kubectl delete pv --all
+kubectl delete pv wordpress-mysql-pv wordpress-wordpress-pv
 ```
 
 ## Production Considerations
 
-1. **Security**
-   - Use Kubernetes Secrets for sensitive data
-   - Enable TLS/SSL certificates
-   - Implement network policies
-   - Regular security updates
+### Security
+- ✅ Use Kubernetes Secrets for passwords
+- ✅ Enable TLS/SSL with cert-manager
+- ✅ Implement network policies
+- ✅ Regular security updates
+- ✅ Non-root container users
 
-2. **Backup**
-   - Implement automated MySQL backups
-   - Backup WordPress uploads directory
-   - Test restore procedures
+### High Availability
+- ✅ Multi-replica deployments
+- ✅ Pod disruption budgets
+- ✅ Readiness and liveness probes
+- ✅ Rolling updates strategy
+- ⚠️ Database replication (not implemented)
 
-3. **High Availability**
-   - Multi-zone deployment
-   - Database replication
-   - Load balancer health checks
+### Backup Strategy
+- ⚠️ Automated MySQL backups (not implemented)
+- ⚠️ WordPress uploads backup (not implemented)
+- ✅ Persistent volume snapshots available
 
-4. **Performance**
-   - CDN for static assets
-   - Redis/Memcached for caching
-   - Database query optimization
-   - Image optimization
+### Performance Optimization
+- ✅ OpCache enabled for PHP
+- ✅ Static asset caching in Nginx
+- ✅ Resource limits configured
+- ⚠️ Redis/Memcached caching (not implemented)
+- ⚠️ CDN integration (not implemented)
 
-5. **Monitoring**
-   - Set up alerting channels
-   - Regular dashboard reviews
-   - Log aggregation (ELK/Loki)
-   - APM integration
+## Technical Details
 
-## OpenResty Configuration
+### OpenResty Compilation
 
-Nginx is compiled with OpenResty including:
-- PCRE JIT compilation
-- IPv6 support
-- HTTP iconv module
-- PostgreSQL module
-- Lua scripting support
-
-Configure options used:
+Nginx compiled with OpenResty including:
 ```bash
 ./configure --prefix=/opt/openresty \
     --with-pcre-jit \
@@ -380,16 +349,53 @@ Configure options used:
     --without-http_redis2_module \
     --with-http_iconv_module \
     --with-http_postgres_module \
+    --with-http_stub_status_module \
     -j8
 ```
 
-## Support
+### PHP Extensions
 
-For issues and questions:
-- Check logs: `kubectl logs <pod-name>`
-- Review metrics in Grafana
-- Check [METRICS.md](METRICS.md) for monitoring details
+Installed extensions:
+- gd (image processing)
+- mysqli, pdo_mysql (database)
+- zip (file compression)
+- opcache (performance)
+- exif (image metadata)
+- bcmath (calculations)
+- redis (caching - driver installed)
+
+### WordPress Initialization
+
+WordPress deployment uses init container to:
+1. Check if WordPress files exist in PVC
+2. Copy files from container to PVC on first boot
+3. Preserve data across pod restarts
+
+## Project Structure
+
+```
+.
+├── docker/
+│   ├── mysql/              # MySQL 8.0 Dockerfile and config
+│   ├── wordpress/          # WordPress PHP-FPM Dockerfile
+│   └── nginx/              # Nginx OpenResty Dockerfile
+├── k8s/
+│   ├── mysql-pvc.yaml
+│   ├── mysql-deployment.yaml
+│   ├── wordpress-pvc.yaml
+│   ├── wordpress-deployment.yaml
+│   ├── nginx-deployment.yaml
+│   └── monitoring/         # Prometheus & Grafana manifests
+├── helm/                   # Helm charts (reference)
+│   ├── wordpress/
+│   └── monitoring/
+└── README.md
+```
 
 ## License
 
 MIT License
+
+## Author
+
+Created for production WordPress deployment on Kubernetes with monitoring and observability.

@@ -18,3 +18,13 @@ build/
 *.swo
 *~
 .env
+
+# Exclude documentation files except README
+METRICS.md
+DEPLOYMENT_STATUS.md
+
+# Exclude scripts
+cleanup.sh
+deploy.sh
+test-deployment.ps1
+*.ps1
